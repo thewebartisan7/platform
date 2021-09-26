@@ -38,28 +38,34 @@ abstract class Screen extends Controller
     /**
      * Display header name.
      *
-     * @var string
+     * @return string
      */
-    public $name;
+    public function name(): ?string
+    {
+        return $this->name ?? null;
+    }
+
+    /**
+     * Permission
+     *
+     * @return iterable|null
+     */
+    public function permission(): ?iterable
+    {
+        return isset($this->permission)
+            ? Arr::wrap($this->permission)
+            : null;
+    }
 
     /**
      * Display header description.
      *
-     * @var string
+     * @return string
      */
-    public $description;
-
-    /**
-     * Permission.
-     *
-     * @var string|array
-     */
-    public $permission;
-
-    /**
-     * @var Repository
-     */
-    private $source;
+    public function description(): ?string
+    {
+        return $this->description ?? null;
+    }
 
     /**
      * Button commands.
@@ -76,27 +82,27 @@ abstract class Screen extends Controller
      *
      * @return Layout[]
      */
-    abstract public function layout(): array;
+    abstract public function layout(): iterable;
 
     /**
-     * @throws Throwable
+     * @param \Orchid\Screen\Repository $repository
      *
      * @return View
      */
-    public function build()
+    public function build(Repository $repository)
     {
         return LayoutFactory::blank([
             $this->layout(),
-        ])->build($this->source);
+        ])->build($repository);
     }
 
     /**
      * @param string $method
      * @param string $slug
      *
+     * @return View
      * @throws Throwable
      *
-     * @return View
      */
     public function asyncBuild(string $method, string $slug)
     {
@@ -127,21 +133,29 @@ abstract class Screen extends Controller
     /**
      * @param array $httpQueryArguments
      *
+     * @return Factory|\Illuminate\View\View
      * @throws ReflectionException
      *
-     * @return Factory|\Illuminate\View\View
      */
     public function view(array $httpQueryArguments = [])
     {
         $query = $this->callMethod('query', $httpQueryArguments);
-        $this->source = new Repository($query);
-        $commandBar = $this->buildCommandBar($this->source);
+
+        foreach ($query as $key => $value) {
+            $this->$key = $value;
+        }
+
+        $queryAndProperty = array_merge(get_object_vars($this), $query);
+        $repository = new Repository($queryAndProperty);
+
+        $commandBar = $this->buildCommandBar($repository);
+        $layouts = $this->build($repository);
 
         return view('platform::layouts.base', [
-            'name'                => $this->name,
-            'description'         => $this->description,
+            'name'                => $this->name(),
+            'description'         => $this->description(),
             'commandBar'          => $commandBar,
-            'layouts'             => $this->build(),
+            'layouts'             => $layouts,
             'formValidateMessage' => $this->formValidateMessage(),
         ]);
     }
@@ -149,10 +163,10 @@ abstract class Screen extends Controller
     /**
      * @param mixed ...$parameters
      *
-     * @throws Throwable
+     * @return Factory|View|\Illuminate\View\View|mixed
      * @throws ReflectionException
      *
-     * @return Factory|View|\Illuminate\View\View|mixed
+     * @throws Throwable
      */
     public function handle(...$parameters)
     {
@@ -171,7 +185,7 @@ abstract class Screen extends Controller
         );
 
         $query = request()->query();
-        $query = ! is_array($query) ? [] : $query;
+        $query = !is_array($query) ? [] : $query;
 
         $parameters = array_filter($parameters);
         $parameters = array_merge($query, $parameters);
@@ -185,19 +199,19 @@ abstract class Screen extends Controller
      * @param string $method
      * @param array  $httpQueryArguments
      *
+     * @return array
      * @throws ReflectionException
      *
-     * @return array
      */
     private function reflectionParams(string $method, array $httpQueryArguments = []): array
     {
         $class = new ReflectionClass($this);
 
-        if (! is_string($method)) {
+        if (!is_string($method)) {
             return [];
         }
 
-        if (! $class->hasMethod($method)) {
+        if (!$class->hasMethod($method)) {
             return [];
         }
 
@@ -217,13 +231,13 @@ abstract class Screen extends Controller
      * @param ReflectionParameter $parameter
      * @param array               $httpQueryArguments
      *
+     * @return mixed
      * @throws BindingResolutionException
      *
-     * @return mixed
      */
     private function bind(int $key, ReflectionParameter $parameter, array $httpQueryArguments)
     {
-        $class = $parameter->getType() && ! $parameter->getType()->isBuiltin()
+        $class = $parameter->getType() && !$parameter->getType()->isBuiltin()
             ? $parameter->getType()->getName()
             : null;
 
@@ -235,14 +249,14 @@ abstract class Screen extends Controller
 
         $instance = resolve($class);
 
-        if ($original === null || ! is_a($instance, UrlRoutable::class)) {
+        if ($original === null || !is_a($instance, UrlRoutable::class)) {
             return $instance;
         }
 
         $model = $instance->resolveRouteBinding($original);
 
         throw_if(
-            $model === null && ! $parameter->isDefaultValueAvailable(),
+            $model === null && !$parameter->isDefaultValueAvailable(),
             (new ModelNotFoundException())->setModel($class, [$original])
         );
 
@@ -256,9 +270,9 @@ abstract class Screen extends Controller
      */
     private function checkAccess(): bool
     {
-        return collect($this->permission)
+        return collect($this->permission())
             ->map(static function ($item) {
-                return Auth::user()->hasAccess($item);
+                return optional(Auth::user())->hasAccess($item);
             })
             ->whenEmpty(function (Collection $permission) {
                 return $permission->push(true);
@@ -280,9 +294,9 @@ abstract class Screen extends Controller
      *
      * @param array $httpQueryArguments
      *
-     *@throws ReflectionException
-     *
      * @return Factory|RedirectResponse|\Illuminate\View\View
+     * @throws ReflectionException
+     *
      */
     protected function redirectOnGetMethodCallOrShowView(array $httpQueryArguments)
     {
@@ -302,9 +316,9 @@ abstract class Screen extends Controller
      * @param string $method
      * @param array  $parameters
      *
+     * @return mixed
      * @throws ReflectionException
      *
-     * @return mixed
      */
     private function callMethod(string $method, array $parameters = [])
     {

@@ -106,10 +106,11 @@ abstract class Layout implements JsonSerializable
         }
 
         $build = collect($this->layouts)
+            ->flatten()
             ->map(function ($layouts) {
                 return Arr::wrap($layouts);
             })
-            ->map(function (array $layouts, string $key) use ($repository) {
+            ->map(function (iterable $layouts, string $key) use ($repository) {
                 return $this->buildChild($layouts, $key, $repository);
             })
             ->collapse()
@@ -161,7 +162,7 @@ abstract class Layout implements JsonSerializable
             ->filter(function () {
                 return $this->isSee();
             })
-            ->reduce(function (array $build, self $layout) use ($key, $repository) {
+            ->reduce(function ($build, self $layout) use ($key, $repository) {
                 $build[$key][] = $layout->build($repository);
 
                 return $build;
