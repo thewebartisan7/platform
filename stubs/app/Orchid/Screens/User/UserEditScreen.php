@@ -44,7 +44,7 @@ class UserEditScreen extends Screen
     /**
      * @var User
      */
-    private $user;
+    protected $user;
 
     /**
      * Query data.

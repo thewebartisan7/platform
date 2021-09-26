@@ -13,6 +13,17 @@ use Illuminate\Support\Arr;
 class Repository extends \Illuminate\Config\Repository implements Countable
 {
     /**
+     * Create a new configuration repository.
+     *
+     * @param  iterable  $items
+     * @return void
+     */
+    public function __construct(iterable $items = [])
+    {
+        $this->items = (array) $items;
+    }
+
+    /**
      * @var int
      */
     protected $position = 0;
