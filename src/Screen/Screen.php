@@ -14,6 +14,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 use Orchid\Platform\Http\Controllers\Controller;
 use Orchid\Support\Facades\Dashboard;
 use ReflectionClass;
@@ -143,12 +144,8 @@ abstract class Screen extends Controller
     {
         $query = $this->callMethod('query', $httpQueryArguments);
 
-        foreach ($query as $key => $value) {
-            $this->$key = $value;
-        }
-
-        $queryAndProperty = array_merge(get_object_vars($this), $query);
-        $repository = new Repository($queryAndProperty);
+        $key = $this->fill($query);
+        $repository = new Repository($query);
 
         $commandBar = $this->buildCommandBar($repository);
         $layouts = $this->build($repository);
@@ -158,8 +155,58 @@ abstract class Screen extends Controller
             'description'         => $this->description(),
             'commandBar'          => $commandBar,
             'layouts'             => $layouts,
+            'key'                 => $key,
             'formValidateMessage' => $this->formValidateMessage(),
         ]);
+    }
+
+    /**
+     * @return array
+     */
+    public function getAvailableProperties(): array
+    {
+        return collect((new \ReflectionObject($this))->getProperties())
+            ->filter(function (\ReflectionProperty $property) {
+                return $property->isPublic() && !$property->isStatic();
+            })
+            ->map(function (\ReflectionProperty $property) {
+                return $property->getName();
+            })
+            ->toArray();
+    }
+
+    /**
+     * @param array $query
+     *
+     * @return string
+     * @throws \Exception
+     */
+    public function fill(array $query): string
+    {
+        $value = collect($query)->only($this->getAvailableProperties())
+            ->each(function ($value, $key) {
+                data_set($this, $key, $value);
+            });
+
+        $key = sprintf("screen-%s-%s", Auth::id(), Str::uuid());
+
+        cache()->remember($key, config('session.lifetime') * 60, function () use ($value) {
+            return $value;
+        });
+
+        return $key;
+    }
+
+    /**
+     *
+     */
+    public function fillSession(): void
+    {
+        $property = cache()->pull(request()->input('_screen'), collect());
+
+        $property->each(function ($value, $key) {
+            data_set($this, $key, $value);
+        });
     }
 
     /**
@@ -193,6 +240,8 @@ abstract class Screen extends Controller
         $parameters = array_filter($parameters);
         $parameters = array_merge($query, $parameters);
 
+        $this->fillSession();
+
         $response = $this->callMethod($method, $parameters);
 
         return $response ?? back();
@@ -224,7 +273,8 @@ abstract class Screen extends Controller
         return collect($parameters)
             ->map(function ($parameter, $key) use ($httpQueryArguments) {
                 return $this->bind($key, $parameter, $httpQueryArguments);
-            })->all();
+            })
+            ->all();
     }
 
     /**

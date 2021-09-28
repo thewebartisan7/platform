@@ -36,6 +36,8 @@
           novalidate
     >
         {!! $layouts !!}
+
+        <input type="hidden" name="_screen" value="{{ $key }}">
         @csrf
         @include('platform::partials.confirm')
     </form>
