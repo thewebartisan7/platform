@@ -167,7 +167,7 @@ abstract class Screen extends Controller
     {
         return collect((new \ReflectionObject($this))->getProperties())
             ->filter(function (\ReflectionProperty $property) {
-                return $property->isPublic() && !$property->isStatic();
+                return $property->isPublic() && ! $property->isStatic();
             })
             ->map(function (\ReflectionProperty $property) {
                 return $property->getName();
@@ -178,8 +178,9 @@ abstract class Screen extends Controller
     /**
      * @param array $query
      *
-     * @return string
      * @throws \Exception
+     *
+     * @return string
      */
     public function fill(array $query): string
     {
