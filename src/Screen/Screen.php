@@ -194,7 +194,7 @@ abstract class Screen extends Controller
 
         $class = new ReflectionClass($this);
 
-        if (!$class->hasMethod($method) || !$class->getMethod($method)->isPublic()) {
+        if (! $class->hasMethod($method) || ! $class->getMethod($method)->isPublic()) {
             return [];
         }
 
@@ -202,7 +202,7 @@ abstract class Screen extends Controller
 
         $route = Route::current();
 
-        if($route === null){
+        if ($route === null) {
             return [];
         }
 
